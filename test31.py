@@ -35,7 +35,7 @@ class MyWindow(QWidget):
 		self.stopButton.clicked.connect(self.stopPlot)
 
 	def setupUI(self):
-		self.setGeometry(200,200,800,400)
+		self.setGeometry(200,200,1000,400)
 		layout = QHBoxLayout()
 		leftlayout = QHBoxLayout()
 		rightlayout = QVBoxLayout()

@@ -68,12 +68,13 @@ class ServerFigureCanvas(FigureCanvas):
 class ServerFigureCanvas2(FigureCanvas):
 	"""docstring for ServerFigureCanvas"""
 	def __init__(self, parent=None):
-		self.fig = Figure(figsize=(4,3))
+		self.fig = Figure(figsize=(4,2.5))
 		self.axes = self.fig.add_subplot(111)
 
 		super().__init__(self.fig)
 		self.setParent(parent)
 		self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+		#self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 		self.updateGeometry()
 
 		self.axes = initAxes(self.axes)
