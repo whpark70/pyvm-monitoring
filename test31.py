@@ -1,12 +1,12 @@
 import sys
 
 from PyQt5.QtWidgets import QMainWindow, QWidget, QPushButton, QApplication, QGridLayout, QVBoxLayout, QHBoxLayout, QSizePolicy
-from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QRunnable, QThreadPool
+from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QRunnable, QThreadPool, QSize
 
 from matplotlib.axes._subplots import Axes
 
 import pymonbase as pmb
-from pymonplot import Worker, ServerFigureCanvas2, RunnablePlotter
+from pymonplot import Worker, ServerFigureCanvas2, RunnablePlotterTwinx
 
 from pyVmomi import vim
 
@@ -21,8 +21,8 @@ class MyWindow(QWidget):
 		super().__init__()
 
 		pmb.setupManagedObject()
-		self.server_moids = pmb.makeManagedObjectIdFromConfig()
-		self.server_names = [ pmb.getVmNameFromMoRefId(moid) for moid in self.server_moids ]
+		self.entity_moids = pmb.makeManagedObjectIdFromConfig()
+		self.server_names = [ pmb.getVmNameFromMoRefId(moid) for moid in self.entity_moids ]
 
 		self.main_widget = QWidget(self)
 		self.canvases = [ ServerFigureCanvas2(parent=self.main_widget) for vm_name in self.server_names]
@@ -42,8 +42,9 @@ class MyWindow(QWidget):
 
 		self.startButton = QPushButton("start", self)
 		self.stopButton = QPushButton("stop", self)
-		leftlayout.addWidget(self.canvases[0])
-		leftlayout.addWidget(self.canvases[1])
+		for idx, _ in enumerate(self.entity_moids):
+			leftlayout.addWidget(self.canvases[idx])
+			
 		rightlayout.addWidget(self.startButton)
 		rightlayout.addWidget(self.stopButton)
 
@@ -53,11 +54,11 @@ class MyWindow(QWidget):
 		self.setLayout(layout)
 
 	def startPlot(self):
-		entity_moids = pmb.makeManagedObjectIdFromConfig()
-		metricIds = pmb.makeMetricIdFromConfig(option='kerpdb')
+		#entity_moids = pmb.makeManagedObjectIdFromConfig()
+		metricIds = pmb.makeMetricIdFromConfig(option='common')
 
-		for idx, entity_moid in enumerate(entity_moids):
-			worker = RunnablePlotter(self.canvases[idx].axes, entity_moid, metricIds)
+		for idx, entity_moid in enumerate(self.entity_moids):
+			worker = RunnablePlotterTwinx(self.canvases[idx].axes, entity_moid, metricIds)
 			worker.signals.return_figure.connect(self.canvases[idx].update_plot)
 			self.threadpool.start(worker)
 

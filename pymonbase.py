@@ -16,7 +16,6 @@ import matplotlib as mpl
 from dateutil.rrule import MINUTELY
 import matplotlib.dates as mdt
 import numpy	as np
-from pandas import Series, DataFrame
 
 # vCenter 접속용 변수 
 config, host, user, password, si, ssl_context = [ None for _ in range(6) ]       # si: servercie instacne
