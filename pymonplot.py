@@ -46,6 +46,13 @@ def initAxes(axes, vm_name=None):
 
 	return axes
 
+def initAxesPercent(axes, vm_name=None):
+	axes.set_ylim([0,100])
+	y_ticks = [ 0, 20, 40, 60, 80, 100]
+	axes.set_yticks(y_ticks)
+
+	return axes
+
 # FigureCanvas: Figure: Server: axes 모두 1:1 대응
 class ServerFigureCanvas(FigureCanvas):
 	"""docstring for ServerFigureCanvas"""
@@ -243,10 +250,11 @@ class RunnablePlotter(QRunnable):
 
 class RunnablePlotterTwinx(QRunnable):
 	
-	def __init__(self, axes, entity_moid, metricIds):
+	def __init__(self, canvas, entity_moid, metricIds):
 		super(RunnablePlotterTwinx,self).__init__()
 		self.signals = WorkerSignals()
-		self.axes = axes
+		self.canvas = canvas
+		self.axes = canvas.axes
 		self.entity_moid = entity_moid
 		self.entityMetricInfo = pmb.EntityPerfInfo(entity_moid, metricIds)
 		self.cids = list(self.entityMetricInfo.counterIds_Metrics.keys())
@@ -280,39 +288,30 @@ class RunnablePlotterTwinx(QRunnable):
 			self.axes.set_title(vmname)
 			#self.axes.set_ylabel('Kbps')
 
-			# display하는 Performance Counter는 2개로 제한
-			for idx, (cid, ydata) in enumerate(self.entityMetricInfo.counterIds_Metrics.items()):
-						
-				cur_y_min, cur_y_max = self.axes.get_ylim()	
-				y_max = max(ydata)
-				
-				if y_max > cur_y_max:
-					self.axes.set_ylim([0, y_max])
-				
-				# cpu usage 비율(%)를 나타내기 위한 처리: 2017.12. 27
-				if cid == 1:
-					vcpu_num = mvars.cpus[vmname]
-					ydata = list(map(lambda m: m/vcpu_num, ydata))
-					
-					self.axes.set_ylim([0,100])
-					y_ticks = [ 0, 20, 40, 60, 80, 100]
-					self.axes.set_yticks(y_ticks)
+			# display하는 Performance Counter는 2개로 제한 : 1, 125
+			# cpu usage 비율(%)를 나타내기 위한 처리: 2017.12. 27
+			# counter id: 1
+			vcpu_num = mvars.cpus[vmname]
+			ydata = list(map(lambda m: m/vcpu_num, self.entityMetricInfo.counterIds_Metrics[1]))
+		
+			self.axes = initAxesPercent(self.axes)
+			line = self.axes.plot(xdata, ydata, color=mvars.colors[0], linewidth=1)
+			self.axes.tick_params(axis='x', labelsize=9)
+			self.axes.tick_params(axis='y',colors=mvars.colors[0], labelsize=9, direction='in') 	# 2017.12.27:  tick label font & color
 									
-				else:
-					ydata = list(ydata)
+			# counter id: 125
+			axes2 = self.axes.twinx()
 
-					
-				if idx == 0:
-					line = self.axes.plot(xdata, ydata, color=mvars.colors[idx], linewidth=1)
-					self.axes.tick_params(axis='x', labelsize=9)
-					self.axes.tick_params(axis='y',colors=mvars.colors[idx], labelsize=9, direction='in') 	# 2017.12.27:  tick label font & color
-				'''
-				else:
-					axes2 = self.axes.twinx()
-					axes2 = initAxes(axes2)
-					line2, = axes2.plot(xdata, list(ydata), color=mvars.colors[idx], linewidth=1)
-					axes2.tick_params('y',colors=mvars.colors[idx], labelsize=9, direction='in' )
-				'''
+			cur_y_min, cur_y_max = axes2.get_ylim()	
+			ydata = list(self.entityMetricInfo.counterIds_Metrics[125])
+			y_max = max(ydata)
+						
+			if y_max > cur_y_max:
+				axes2.set_ylim([0, y_max])		
+						
+			axes2 = initAxes(axes2)
+			line2, = axes2.plot(xdata, ydata, color=mvars.colors[1], linewidth=1)
+			axes2.tick_params('y',colors=mvars.colors[1], labelsize=9, direction='in' )
 				
 			handles, _ = self.axes.get_legend_handles_labels()
 			self.axes.legend(handles=self.color_patch)

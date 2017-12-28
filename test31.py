@@ -35,7 +35,7 @@ class MyWindow(QWidget):
 		self.stopButton.clicked.connect(self.stopPlot)
 
 	def setupUI(self):
-		self.setGeometry(200,200,1000,400)
+		self.setGeometry(200,200,600,400)
 		layout = QHBoxLayout()
 		leftlayout = QHBoxLayout()
 		rightlayout = QVBoxLayout()
@@ -58,7 +58,7 @@ class MyWindow(QWidget):
 		metricIds = pmb.makeMetricIdFromConfig(option='common')
 
 		for idx, entity_moid in enumerate(self.entity_moids):
-			worker = RunnablePlotterTwinx(self.canvases[idx].axes, entity_moid, metricIds)
+			worker = RunnablePlotterTwinx(self.canvases[idx], entity_moid, metricIds)
 			worker.signals.return_figure.connect(self.canvases[idx].update_plot)
 			self.threadpool.start(worker)
 
