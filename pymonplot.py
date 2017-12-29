@@ -42,7 +42,7 @@ def initAxes(axes, vm_name=None):
 	axes.xaxis.set_major_formatter(xformatter)
 
 	axes.yaxis.set_major_locator(ylocator)
-	axes.grid()
+	#axes.grid()
 
 	return axes
 
@@ -298,20 +298,22 @@ class RunnablePlotterTwinx(QRunnable):
 			line = self.axes.plot(xdata, ydata, color=mvars.colors[0], linewidth=1)
 			self.axes.tick_params(axis='x', labelsize=9)
 			self.axes.tick_params(axis='y',colors=mvars.colors[0], labelsize=9, direction='in') 	# 2017.12.27:  tick label font & color
+			self.axes.grid(linewidth=0.2)
 									
 			# counter id: 125
 			axes2 = self.axes.twinx()
+			axes2 = initAxes(axes2)
 
 			cur_y_min, cur_y_max = axes2.get_ylim()	
 			ydata = list(self.entityMetricInfo.counterIds_Metrics[125])
 			y_max = max(ydata)
-						
+								
 			if y_max > cur_y_max:
 				axes2.set_ylim([0, y_max])		
 						
-			axes2 = initAxes(axes2)
 			line2, = axes2.plot(xdata, ydata, color=mvars.colors[1], linewidth=1)
 			axes2.tick_params('y',colors=mvars.colors[1], labelsize=9, direction='in' )
+			axes2.grid(linewidth=0.2)
 				
 			handles, _ = self.axes.get_legend_handles_labels()
 			self.axes.legend(handles=self.color_patch)
