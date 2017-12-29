@@ -265,7 +265,11 @@ class RunnablePlotterTwinx(QRunnable):
 
 	@pyqtSlot()
 	def run(self): # A slot take no params
-				
+		
+		# counter id: 125
+		axes2 = self.axes.twinx()
+		axes2 = initAxes(axes2)
+
 		for t, _ in self.entityMetricInfo.generateMetrics():
 			
 			xdata = list(self.entityMetricInfo.timestamp)
@@ -295,23 +299,23 @@ class RunnablePlotterTwinx(QRunnable):
 			ydata = list(map(lambda m: m/vcpu_num, self.entityMetricInfo.counterIds_Metrics[1]))
 		
 			self.axes = initAxesPercent(self.axes)
-			line = self.axes.plot(xdata, ydata, color=mvars.colors[0], linewidth=1)
+			line = self.axes.plot(xdata, ydata, color=mvars.colors[0], linewidth=0.8)
 			self.axes.tick_params(axis='x', labelsize=9)
 			self.axes.tick_params(axis='y',colors=mvars.colors[0], labelsize=9, direction='in') 	# 2017.12.27:  tick label font & color
 			self.axes.grid(linewidth=0.2)
-									
-			# counter id: 125
-			axes2 = self.axes.twinx()
-			axes2 = initAxes(axes2)
-
-			cur_y_min, cur_y_max = axes2.get_ylim()	
+			
+			# counter id: 125						
+			#cur_y_min, cur_y_max = axes2.get_ylim()	
 			ydata = list(self.entityMetricInfo.counterIds_Metrics[125])
 			y_max = max(ydata)
-								
+			axes2.set_ylim([0, y_max])		
+			'''					
 			if y_max > cur_y_max:
+				axes2.set_ylim([0, y_max])
+			else:
 				axes2.set_ylim([0, y_max])		
-						
-			line2, = axes2.plot(xdata, ydata, color=mvars.colors[1], linewidth=1)
+			'''			
+			line2, = axes2.plot(xdata, ydata, color=mvars.colors[1], linewidth=0.8)
 			axes2.tick_params('y',colors=mvars.colors[1], labelsize=9, direction='in' )
 			axes2.grid(linewidth=0.2)
 				
