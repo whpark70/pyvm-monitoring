@@ -35,7 +35,8 @@ def initAxes(axes, vm_name=None):
 	xlocator = mdt.AutoDateLocator(interval_multiples=True)
 	xlocator.intervald[MINUTELY] = [10]
 
-	ylocator = ticker.MaxNLocator(nbins='5', steps=[1, 5], min_n_ticks=4)
+	#ylocator = ticker.MaxNLocator(nbins='5', steps=[1, 5], min_n_ticks=4)
+	ylocator = ticker.MaxNLocator(nbins='5')
 
 	xformatter = mdt.DateFormatter('%H:%M', tz=seoul)
 	axes.xaxis.set_major_locator(xlocator)
@@ -84,8 +85,8 @@ class ServerFigureCanvas2(FigureCanvas):
 		
 		super().__init__(self.fig)
 		self.setParent(parent)
-		#self.policy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-		self.policy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+		self.policy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+		#self.policy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 		self.policy.setHeightForWidth(True)
 		self.setSizePolicy(self.policy)
 		self.updateGeometry()
@@ -308,15 +309,11 @@ class RunnablePlotterTwinx(QRunnable):
 			#cur_y_min, cur_y_max = axes2.get_ylim()	
 			ydata = list(self.entityMetricInfo.counterIds_Metrics[125])
 			y_max = max(ydata)
-			axes2.set_ylim([0, y_max])		
-			'''					
-			if y_max > cur_y_max:
-				axes2.set_ylim([0, y_max])
-			else:
-				axes2.set_ylim([0, y_max])		
-			'''			
+			axes2.set_ylim([0, y_max])
+						
 			line2, = axes2.plot(xdata, ydata, color=mvars.colors[1], linewidth=0.8)
 			axes2.tick_params('y',colors=mvars.colors[1], labelsize=9, direction='in' )
+			#axes2.yaxis.set_major_locator(ticker.MaxNLocator(5))
 			axes2.grid(linewidth=0.2)
 				
 			handles, _ = self.axes.get_legend_handles_labels()
