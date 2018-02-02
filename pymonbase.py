@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
 import time, configparser, ssl, atexit
-import re
+import re, os
 
 from pyVmomi import vim
 from pyVim.connect import SmartConnect, Disconnect
@@ -25,7 +25,9 @@ content, perfManager, viewManager, propertyCollector, searchIndex, container = [
 def readConfig(inifile='monitor.ini'):
     global config
     config = configparser.ConfigParser()
-    conf = config.read(inifile)
+    #conf = config.read(inifile)
+    filename = os.path.join(os.path.abspath(os.path.dirname(__file__)), '', inifile)
+    conf = config.read(filename)
     if len(conf) == 0:
         raise ValueError("Failed to open monitor.ini file")
 

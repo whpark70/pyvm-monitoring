@@ -176,7 +176,7 @@ def GetVmInfo(vm, content, vchtime, interval, perf_dict):
 	return vminfo
 
 
-def DisplayVmInfo(vminfo):
+def GetDisplayVmInfo(vminfo):
 	info_list = []				# list for vm info
 	#info_list.append("{:<32}{:2}{}".format('Server Name',':', vminfo.serverName))
 	info_list.append("Sever Name".ljust(32) + ": " +"{}".format(vminfo.serverName))
@@ -331,7 +331,7 @@ def main():
 	if moref != None:
 		vminfo = GetVmInfo(moref, content, vchtime, 1, perf_dict)
 
-	vminfo_list = DisplayVmInfo(vminfo)
+	vminfo_list = GetDisplayVmInfo(vminfo)
 
 	for info in vminfo_list:
 		print(info)
