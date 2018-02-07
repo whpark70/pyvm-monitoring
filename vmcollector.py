@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 from datetime import timedelta
 from collections import namedtuple
 import pymonbase as pmb
@@ -153,7 +154,7 @@ def GetVmInfo(vm, content, vchtime, interval, perf_dict):
 	vminfo.cpuReady = "Average {:.1f} %, Maximum {:.1f} %".format( (cpuReady / 20000 * 100),
 												((float(max(statCpuReady[0].value[0].value)) / 20000 * 100)) )
 	vminfo.cpuUsage = "{:.0f} %".format(cpuUsage)
-	vminfo.memory = "{} MB ({:.1f} GB".format( summary.config.memorySizeMB, (float(summary.config.memorySizeMB) / 1024))
+	vminfo.memory = "{} MB ({:.1f} GB)".format( summary.config.memorySizeMB, (float(summary.config.memorySizeMB) / 1024))
 	vminfo.memoryShared = "{:.0f} %, {:.0f} MB".format( ((memoryShared / summary.config.memorySizeMB) * 100),  memoryShared)
 	vminfo.memoryBallon = "{:.0f} %, {:.0f} MB".format( ((memoryBallon / summary.config.memorySizeMB) * 100),  memoryBallon)
 	vminfo.memorySwapped = "{:.0f} %, {:.0f} MB".format( ((memorySwapped / summary.config.memorySizeMB) * 100),  memorySwapped)
@@ -185,24 +186,28 @@ def GetDisplayVmInfo(vminfo):
 	info_list.append("Snapshot Status".ljust(32) + ": " +"{}".format(vminfo.snapshotStaus))
 	info_list.append("VM .vmx Path".ljust(32) + ": " +"{}".format(vminfo.vmxPath))
 	
+	info_list.append('')
 	info_list.append("Virtual Disks".ljust(32) + ": " +"{}".format(vminfo.vDisks[0]))
 	if len(vminfo.vDisks) > 1:
 		vminfo.vDisks.pop(0)
 		for vd_info in vminfo.vDisks:
 			info_list.append("".ljust(32) + "  " +"{}".format(vd_info))
 	
+	info_list.append('')
 	info_list.append("Logical Drive".ljust(32) + ": " +"{}".format(vminfo.lDisks[0]))
 	if len(vminfo.lDisks) > 1:
 		vminfo.lDisks.pop(0)
 		for drive_info in vminfo.lDisks:
 			info_list.append("".ljust(32) + "  " +"{}".format(drive_info))
 
+	info_list.append('')
 	info_list.append("Virtual NIC(s)".ljust(32) + ": " +"{}".format(vminfo.nics[0]))
 	if len(vminfo.nics) > 1:
 		vminfo.nics.pop(0)
 		for nic_info in vminfo.nics:
 			info_list.append("".ljust(32) + "  " +"{}".format(nic_info))
 
+	info_list.append('')
 	info_list.append("[VM] IP Address".ljust(32) + ": " +"{}".format(vminfo.ipaddr))
 	info_list.append("[VM] Limits".ljust(32) + ": " +"{}".format(vminfo.limits))
 	info_list.append("[VM] Memory".ljust(32) + ": " +"{}".format(vminfo.memory))
@@ -223,7 +228,7 @@ def GetDisplayVmInfo(vminfo):
 
 
 # counterId에 따른 performance metrics를 구한다.
-def BuildQuery(content, vchtime, counterId, instance, vm, interval):
+def BuildQuery(content, vchtime, counterId, instance, vm, interval=1):
 	perfManager = content.perfManager
 	metricId = vim.PerformanceManager.MetricId(counterId=counterId, instance=instance)
 	if interval <= 0: interval = 1
@@ -313,28 +318,42 @@ def GetMoFromFilteredObjByProps(props, vmanme):
 			return prop['moref']
 	return None
 
+# get VM MO in operation (vms operating in LUN01~03)
+# return : vm dict {vmanme: vm_ref}
+def GetBizVmsInOperatingLUN(content):
+	"""
+	스토리지 LUN01~03에 속해 있는 운영VM 리스트를 반환한다. 
+	기본 예외vm: Vmigration, vCenter, recruit, shadowgre 등 업무시스템과 연관이 적은 vm
+	"""
+	datacenter = content.rootFolder.childEntity
+	Operating_LUNs = ['LUN01', 'LUN02', 'LUN03']
+	exclude_vm_list = ['vCenter', 'recruit.apsi.co.kr', 'Magicsafe', 'shadowgre', 'VMmigration' ]
+	vms_dict = {}
+	for ds in datacenter[0].datastore:
+		if ds.name in Operating_LUNs:
+			for vm in ds.vm:
+				if vm.runtime.powerState == 'poweredOn' and vm.name not in exclude_vm_list:
+					vms_dict[vm.name] = vm
+
+	return vms_dict
+	
+
+
 def main():
 	pmb.setupManagedObject()
 	content = pmb.si.content
-	
-	# Get all the performance counters
 	perf_dict = GetPerfDict(content)
-
-	prop_list = ['runtime.powerState', 'name']
-	props = GetProperties(content, [vim.VirtualMachine], prop_list, vim.VirtualMachine)
-
-	moref = GetMoFromFilteredObjByProps(props, 'kerpdb')
-	
 	vchtime = pmb.si.CurrentTime()
+	kerpdb = pmb.getManagedObjectRefId('kerpdb')
 
-	vminfo = None
-	if moref != None:
-		vminfo = GetVmInfo(moref, content, vchtime, 1, perf_dict)
-
-	vminfo_list = GetDisplayVmInfo(vminfo)
+	vminfo = GetVmInfo(kerpdb, content, vchtime, 1, perf_dict)
+	vminfo_list = GetDisplayVmInfo(vminfo)	
 
 	for info in vminfo_list:
 		print(info)
+
+	
+
 
 
 
