@@ -68,7 +68,7 @@ class MyWindow(QWidget):
 	def updatePlot(self):
 
 		entity_moids = pmb.makeManagedObjectIdFromConfig()
-		metricIds = pmb.makeMetricIdFromConfig(option='kerpdb')
+		metricIds = pmb.makeMetricIdFromConfig()
 			
 		self.plotters = [ pmp.Plotter() for _ in self.server_names ]
 		self.threads =  [ QThread() for _ in self.server_names ]
@@ -85,13 +85,7 @@ class MyWindow(QWidget):
 			self.send_fig.emit(self.canvases[idx].axes, entity_moid, metricIds )
 		
 
-def main():
-	
+if __name__ == '__main__':
 	app = QApplication(sys.argv)
 	myWindow = MyWindow()
 	app.exec_()
-
-
-
-if __name__ == '__main__':
-	main()

@@ -79,8 +79,8 @@ class ServerFigureCanvas(FigureCanvas):
 class ServerFigureCanvas2(FigureCanvas):
 	"""docstring for ServerFigureCanvas"""
 	def __init__(self, parent=None):
-		self.fig = Figure(figsize=(5,3), tight_layout=True)
-		#self.fig = Figure(tight_layout=True)
+		#self.fig = Figure(figsize=(5,3), tight_layout=True)
+		self.fig = Figure(tight_layout=True)
 		self.axes = self.fig.add_subplot(111)
 		
 		super().__init__(self.fig)

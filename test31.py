@@ -66,13 +66,8 @@ class MyWindow(QWidget):
 		pass
 
 
-def main():
-	
+
+if __name__ == '__main__':
 	app = QApplication(sys.argv)
 	myWindow = MyWindow()
 	app.exec_()
-
-
-
-if __name__ == '__main__':
-	main()

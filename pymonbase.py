@@ -231,6 +231,7 @@ class EntityPerfInfo(object):
         
         global perfManager
         self.qSpec.maxSample = 1
+		self.monitorOn = monitoron
         while monitoron:
             metricsOfEntity = perfManager.QueryStats(querySpec=[self.qSpec])
 
