@@ -77,15 +77,16 @@ class MyWindow(QWidget):
 
 		# signal emit를 하는 순서가 대단히 중요. 관련 thread start 후 곧바로. otherwise emit을 찾지 못함.
 		for  idx, (plotter, thread, entity_moid) in enumerate( plotters_threads ): 
-			self.send_fig.connect(plotter.replot)
+			self.send_fig.connect(plotter.replot)											# connect
 			plotter.return_fig.connect(self.canvases[idx].update_plot)
 
 			plotter.moveToThread(thread)
 			thread.start()
-			self.send_fig.emit(self.canvases[idx].axes, entity_moid, metricIds )
+			self.send_fig.emit(self.canvases[idx].axes, entity_moid, metricIds )			# emit
 		
 
 if __name__ == '__main__':
 	app = QApplication(sys.argv)
 	myWindow = MyWindow()
+	myWindow.show()
 	app.exec_()
