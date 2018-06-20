@@ -12,12 +12,18 @@ from datetime import datetime
 import pytz
 import pymysql
 from sqlalchemy import create_engine
+import sys
 
 now = datetime.now()
 
-# snmp data type이 unsigned int이므로 보정, used in dataframe.applymap
-def modified_network_usage(s):
-  return s if s >= 0 else s + 4294967295
+# snmp data type이 unsigned int. max value(4294967295) 이후 다시 0 재시작 하므로
+# 이에 대한 보정 필요  used in dataframe.applymap
+def interp_ifvalue(s):
+  return (s+4294967295) if s < 0 else s
+
+def to_bps(In, interval):
+  #in_bps = (In*8/interval) if In >= 0 else ( (In+4294967295)*8/interval)
+  return round(In*8/interval)
 
 g = bulkCmd(SnmpEngine(),
     CommunityData('public'),
@@ -62,22 +68,35 @@ dbuser = 'snmpuser'
 dbuser_pwd = 'snmpuser'
 
 db_engine = create_engine("mysql+pymysql://"+dbuser+':'+dbuser_pwd +"@10.1.1.148:3306/snmpdb")
-
+last_dt = None    # 마지막 데이터 수집 시간
 with db_engine.connect() as conn:
   
-  # read and delete prior data from interface_raw table
-  # if_prior_df = pd.read_sql_table("interface_raw", db_engine, index_col='name')
-  if_prior_df = pd.read_sql_query("select name, InOctets, OutOctets from utm_interface_raw", db_engine, index_col='name')
-  db_engine.execute("delete from utm_interface_raw")
-
-  if_usage_df = if_current_df.subtract(if_prior_df,fill_value=0) 
-  if_musage_df = if_usage_df.applymap(modified_network_usage)
+  # 마지막 데이터 수집시간 query
+  last_dt_df = pd.read_sql_query("select DATE_FORMAT(max(date),'%%Y-%%m-%%d %%T') as date from utm_interface_raw", db_engine)
+  last_dt = last_dt_df.ix[0, 'date']   # type: str
   
-  # save current snmp data
-  if_current_df['date'] = now
-  if_current_df.to_sql(name='utm_interface_raw', con=db_engine, if_exists='append')
-  if_musage_df['date'] = now
-  if_musage_df.to_sql(name='utm_interface_usage', con=db_engine, if_exists='append')
+  if last_dt != None:
+    # 마지막 수집한 데이터
+    if_last_df = pd.read_sql_query("select name, InOctets, OutOctets from utm_interface_raw where DATE_FORMAT(date,'%%Y-%%m-%%d %%T') = " + "'" + last_dt  + "'" , db_engine, index_col='name')
+
+    interval = ( now - datetime.strptime(last_dt, '%Y-%m-%d %H:%M:%S') ).seconds      # time interval : current -last
+
+    if_usage_df = if_current_df.subtract(if_last_df,fill_value=0)
+    if_current_df.to_sql(name='utm_interface_raw', con=db_engine, if_exists='append')
+
+    if_musage_df = if_usage_df.applymap(interp_ifvalue)
+   
+    if_musage_df['in_bps'] = if_musage_df.apply(lambda x : to_bps(x['InOctets'],interval), axis=1)
+    if_musage_df['out_bps'] = if_musage_df.apply(lambda x : to_bps(x['OutOctets'],interval), axis=1)
+    if_musage_df.to_sql(name='utm_interface_usage', con=db_engine, if_exists='append')
+    
+    
+  else:
+    # if_current_df['date'] = now   # table 에 자동으로 시간 입력으로 대체
+    if_current_df.to_sql(name='utm_interface_raw', con=db_engine, if_exists='append')
+    
+  db_engine.execute("delete from utm_interface_raw where date < now() - interval 30 minute")
+
 
 
 
