@@ -42,6 +42,14 @@ def readConfig(inifile='monitor.ini'):
 def getlist(option, sep=',', chars=None):
     return [ chunk.strip(chars) for chunk in option.split(sep) ]
 
+# config file의 [vm.hostname]의 base에 등록된 server list를 가져온다. 2018. 04. 10
+def getVmList(option='base'):
+    global config
+    if config == None:  readConfig()
+    vm_hostnames = getlist(config['vm.hostname'][option])
+    return vm_hostnames
+
+
 # make vm server moref id from section: [vm.hostname] opiton:['base']
 def makeManagedObjectIdFromConfig(option='base'):
     global config
@@ -170,7 +178,7 @@ class EntityPerfInfo(object):
 
         # x, y date for plotting
         self.timestamp = deque(maxlen=90)		# x-data: query timestamp. 20초 간격으로 수집 1분에 3개, 30분 당안 90개
-        self.counterIds_Metrics = {}			# y-date: metrics per counter id
+        self.counterIds_Metrics = {}			# y-data: metrics per counter id
 
         self.setupQuerySpecs()
         if collectInAdvance == True: 
@@ -191,7 +199,7 @@ class EntityPerfInfo(object):
 
     # setup Query Spec
     # maxSample: # of sample, use to determine whether reatime or not
-    def setupQuerySpecs(self,max_sample=1):
+    def setupQuerySpecs(self,max_sample=90):
         try:
 
             if	len(self.counterMetricIds) != 0:
@@ -232,7 +240,7 @@ class EntityPerfInfo(object):
             for metric in m.value:			# walk through conter id
                 cid = metric.id.counterId
                 metrics = metric.value[:]
-                self.counterIds_Metrics.setdefault(cid, deque(maxlen=self.qSpec.maxSample)).extend(metrics)  # 5분간의 데이터 저장
+                self.counterIds_Metrics.setdefault(cid, deque(maxlen=90)).extend(metrics)  # 5분간의 데이터 저장
 
         #print('collectMetrics func: collecting performance data....')		#
         return self.timestamp, self.counterIds_Metrics
@@ -259,7 +267,7 @@ class EntityPerfInfo(object):
                     cid = metric.id.counterId
                     metrics = metric.value[0]	# only one
                     metrics_in_gen.setdefault(cid, metrics)
-                    self.counterIds_Metrics.setdefault(cid, deque(maxlen=self.qSpec.maxSample)).append(metrics)     # update original metrics
+                    self.counterIds_Metrics.setdefault(cid, deque(maxlen=90)).append(metrics)     # update original metrics
 
             yield timestamp_in_gen, metrics_in_gen
 
@@ -272,20 +280,15 @@ class EntityPerfInfo(object):
                    
         metricsOfEntity = perfManager.QueryStats(querySpec=[self.qSpec])
 
-        timestamp_in_gen ,metrics_in_gen = None, {}
-
         for m in metricsOfEntity:
             for ts in m.sampleInfo:
-                timestamp_in_gen =ts.timestamp
                 self.timestamp.append(ts.timestamp)     # update orginal timestamp
 
             for metric in m.value:          # walk through conter id
                 cid = metric.id.counterId
                 metrics = metric.value[0]   # only one
-                metrics_in_gen.setdefault(cid, metrics)
-                self.counterIds_Metrics.setdefault(cid, deque(maxlen=self.qSpec.maxSample)).append(metrics)     # update original metrics
-
-        return timestamp_in_gen, metrics_in_gen
+                self.counterIds_Metrics.setdefault(cid, deque(maxlen=90)).append(metrics)     # update original metrics
+               
 
 # added: 2018. 04. 09
 def interploateMetrics(ts, metrics, kind='quadratic' ):
@@ -300,15 +303,15 @@ def interploateMetrics(ts, metrics, kind='quadratic' ):
 
     # interp1d func가 argument로 object array를 받지 않기 때문에 
     # datetime.datetime 유형을 float형으로 변환(Unix time: 1970.01.01 이후의 누적 초)
-    unix_ts = [ t.timestamp() for t in ts]          
+    unix_ts = [ t.timestamp() for t in ts] 
 
     # interpolation(보간)을 하기 위해 time interval을 조정, ex) interaval 10secs
-    ts_new = [ t for t in np.arange(min(unix_ts), max(unix_ts) + 1, 10.0) ] 
+    ts_new = [ t for t in np.arange(min(unix_ts), max(unix_ts) + 1, 5.0) ] 
     
     # 보간 된 위 ts_new를 mpl datetime float format으로 변환(기준 변경 : 1970.1.1  -> 0001.1.1 UTC)
     # mpl datetime float format을 mpl datetime으로 변환
     # mpl은 기본적으로 plotting을 하기 위해 datetime을 형식의 data를 float으로 변환한다. 
-    mpl_ts_new = [ mdt.num2date(mdt.epoch2num(t)) for t in np.arange(min(unix_ts), max(unix_ts) + 1, 10.0) ]
+    mpl_ts_new = [ mdt.num2date(mdt.epoch2num(t)) for t in np.arange(min(unix_ts), max(unix_ts) + 1, 5.0) ]
    
     # 기존 데이터를 이용한 interpolation function을 구한다
     f = interp1d(unix_ts, metrics, kind=kind)
@@ -348,9 +351,13 @@ if __name__ == '__main__':
     metricId = vim.PerformanceManager.MetricId(counterId=int(cid), instance="")
     # Performance Info 생성 
     entityMetricsInfo = EntityPerfInfo(moid=moref_id, counterMetricIds=[ metricId] )
+    print(entityMetricsInfo.timestamp)
+    entityMetricsInfo.getMetrics()
+    print(entityMetricsInfo.timestamp)
 
+    '''
     ts = list(entityMetricsInfo.timestamp)
-    metrics = list(entityMetricsInfo.counterIds_Metrics[1])
+    metrics = list(entityMetricsInfo.counterIds_Metrics[cid])
     
     # get interpolated data
     mpl_ts_new, metrics_new = interploateMetrics(ts, metrics)
@@ -373,6 +380,6 @@ if __name__ == '__main__':
 
     plt.plot(mpl_ts_new, metrics_new)
     plt.show()
-
+    '''
    
 

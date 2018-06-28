@@ -176,6 +176,152 @@ def GetVmInfo(vm, content, vchtime, interval, perf_dict):
 
 	return vminfo
 
+# for qt
+def GetVmInfoMetrics(vm, content, vchtime, interval):
+	
+	statInt = interval * 3		# There are 3 20s samples in each minute
+	summary = vm.summary
+	# refer to mvariables for cid
+	counterIds = [ 12, 2, 33, 37, 90, 70, 178, 179, 182, 183, 149, 148 ]
+	# intance arg.
+	instances = [ "", "", "", "", "", "", "*", "*", "*", "*", "", "" ]
+	disk_list = []
+	network_list = []
+
+	# Convert limit and reservation values from -1 to None
+	if vm.resourceConfig.cpuAllocation.limit == -1:
+		vmcpulimit = "None"
+	else:
+		vmcpulimit = "{} Mhz".format(vm.resourceConfig.cpuAllocation.limit)
+
+	if vm.resourceConfig.memoryAllocation.limit == -1:
+		vmmemlimit = "None"
+	else:
+		vmmemlimit = "{} MB".format(vm.resourceConfig.memoryAllocation.limit)
+
+	if vm.resourceConfig.cpuAllocation.reservation == 0:
+		vmcpures = "None"
+	else:
+		vmcpures ="{} Mhz".format(vm.resourceConfig.cpuAllocation.reservation)
+
+	if vm.resourceConfig.memoryAllocation.reservation == 0:
+		vmmemres = "None"
+	else:
+		vmmemres = "{} MB".format(vm.resourceConfig.memoryAllocation.reservation)
+
+	vm_hardware = vm.config.hardware
+	for each_vm_hardware in vm_hardware.device:
+		if(each_vm_hardware.key >= 2000) and (each_vm_hardware.key < 3000):
+			disk_list.append('{} | {:.1f}GB | Thin: {} | {}'.format(each_vm_hardware.deviceInfo.label,
+														each_vm_hardware.capacityInKB/1024/1024,
+														each_vm_hardware.backing.thinProvisioned,
+														each_vm_hardware.backing.fileName))
+		elif(each_vm_hardware.key >= 4000) and (each_vm_hardware.key < 5000):
+			network_list.append('{} | {} | {}'.format(each_vm_hardware.deviceInfo.label,
+													each_vm_hardware.deviceInfo.summary,
+													each_vm_hardware.macAddress))
+
+	# Disk Usage
+	guestDiskInfos = vm.guest.disk
+	DiskInfo = namedtuple('DiskInfo', 'dirve, capacity, free, usage')
+
+	diskinfo_list = []
+	for gdiskinfo in guestDiskInfos:
+		drive = gdiskinfo.diskPath[0]
+		capacity = gdiskinfo.capacity/1024/1024/1024
+		free = gdiskinfo.freeSpace/1024/1024/1024
+		usage = (capacity - free)/capacity * 100
+		diskinfo = DiskInfo(drive,capacity,free,usage)
+
+		diskinfo_list.append(diskinfo)
+
+	diskinfo_list.sort(key=lambda diskinfo: diskinfo[0])
+
+	diskinfo_print_list = []
+	for di in diskinfo_list:
+		diskinfo_print_list.append('Drive: {}, Capacity: {:0.1f}GB, Free: {:0.1f}GB, Usage: {:0.1f}%'.format(di.dirve, di.capacity, di.free,di.usage))
+
+
+	cids_metrics = QueryMetrics(content, vchtime, counterIds, instances, vm, interval=1 )
+	# CPU Ready Average (cid: 12)
+	statCpuReady = cids_metrics[12]
+	cpuReady = ( float(sum(statCpuReady) / statInt) )
+
+	# CPU Usage Average % (cid: 2)
+	statCpuUsage = cids_metrics[2]
+	cpuUsage = ( float(sum(statCpuUsage) / statInt) / 100)
+	# Memory Active Average MB (cid: 33)
+	statMemoryActive = cids_metrics[33]
+	memoryAcitve = ( float(sum(statMemoryActive) / 1024) / statInt)
+	# Memory Shared (cid: 37)
+	statMemoryShared = cids_metrics[37]
+	memoryShared = (float(sum(statMemoryShared) / 1024) / statInt)
+	# memoryBalloon  (cid: 90)
+	statMemoryBalloon = cids_metrics[90]
+	memoryBallon = (float(sum(statMemoryBalloon) /1024 ) / statInt)
+	# memory Swapped (cid: 70)
+	statMemorySwapped = cids_metrics[70]
+	memorySwapped = (float(sum(statMemorySwapped) / 1024) / statInt)
+	
+	# Datastore Average IO (cid: 178, 179)
+	statDatastoreIoRead = cids_metrics[178]
+	DatastoreIoRead = (float(sum(statDatastoreIoRead)) / statInt)
+	statDatastoreIoWrite = cids_metrics[179]
+	DatastoreIoWrite = (float(sum(statDatastoreIoWrite)) / statInt)
+
+	# Datastore Average Latency (cid: 182, 183)
+	statDatastoreLatRead = cids_metrics[182]
+	DatastoreLatRead = (float(sum(statDatastoreLatRead)) / statInt)
+	statDatastoreLatWrite = cids_metrics[183]
+	DatastoreLatWrite = (float(sum(statDatastoreLatWrite)) / statInt)
+
+	# Network usage (Tx/Rx) (cid: 149, 148)
+	statNetworkTx = cids_metrics[149]
+	networkTx = (float(sum(statNetworkTx) * 8/ 1024) / statInt)
+	statNetworkRx = cids_metrics[148]
+	networkRx = (float(sum(statNetworkRx) * 8/ 1024) / statInt)
+
+	vminfo = ApLiveVmInfo()
+	vminfo.serverName = summary.config.name
+	vminfo.description = summary.config.annotation
+	vminfo.guest = summary.config.guestFullName
+	if vm.rootSnapshot:
+		vminfo.snapshotStaus = 'Snapshots present'
+	else:
+		vminfo.snapshotStaus = 'No Snapshots'
+	vminfo.vmxPath = summary.config.vmPathName
+	vminfo.vDisks = disk_list
+	vminfo.lDisks = diskinfo_print_list
+	vminfo.nics = network_list
+	vminfo.ipaddr = "{}".format(vm.guest.ipAddress)
+	vminfo.limits = "CPU: {}, Memory: {}".format(vmcpulimit, vmmemlimit)
+	vminfo.reservations = "CPU: {}, Memory: {}".format(vmcpures, vmmemres)
+	vminfo.numOfvCpu = summary.config.numCpu
+	vminfo.cpuReady = "Average {:.1f} %, Maximum {:.1f} %".format( (cpuReady / 20000 * 100),
+												((float(max(statCpuReady)) / 20000 * 100)) )
+	vminfo.cpuUsage = "{:.0f} %".format(cpuUsage)
+	vminfo.memory = "{} MB ({:.1f} GB)".format( summary.config.memorySizeMB, (float(summary.config.memorySizeMB) / 1024))
+	vminfo.memoryShared = "{:.0f} %, {:.0f} MB".format( ((memoryShared / summary.config.memorySizeMB) * 100),  memoryShared)
+	vminfo.memoryBallon = "{:.0f} %, {:.0f} MB".format( ((memoryBallon / summary.config.memorySizeMB) * 100),  memoryBallon)
+	vminfo.memorySwapped = "{:.0f} %, {:.0f} MB".format( ((memorySwapped / summary.config.memorySizeMB) * 100),  memorySwapped)
+	vminfo.memoryAcitve = "{:.0f} %, {:.0f} MB".format( ((memoryAcitve / summary.config.memorySizeMB) * 100),  memoryAcitve)
+	vminfo.datastoreAvgIo = "Read: {:.0f} IOPS, Write: {:.0f} IOPS".format(DatastoreIoRead, DatastoreIoWrite)
+	vminfo.datastoreAvgLatency = "Read: {:.0f} ms, Write: {:.0f} ms".format(DatastoreLatRead, DatastoreLatWrite)
+	vminfo.overallNetworkUage = "Transmitted {:.3f} Mbps, Received {:.3f} Mbps".format(networkTx, networkRx)
+	vminfo.hostName = "{}".format(summary.runtime.host.name)
+	vminfo.hostCpuDetail = "Processor Sockets: {}, Core per Socket {}".format(
+		 summary.runtime.host.summary.hardware.numCpuPkgs,
+		 (summary.runtime.host.summary.hardware.numCpuCores / summary.runtime.host.summary.hardware.numCpuPkgs) )
+	vminfo.hostCpuType = "{}".format(summary.runtime.host.summary.hardware.cpuModel)
+	vminfo.hostCpuUsage = "Used: {} Mhz, Total: {} Mhz".format(
+		summary.runtime.host.summary.quickStats.overallCpuUsage,
+		(summary.runtime.host.summary.hardware.cpuMhz * summary.runtime.host.summary.hardware.numCpuCores))
+	vminfo.hostMemoryUsage = "Used: {:.0f} GB, Total: {:.0f} GB".format(
+		(float(summary.runtime.host.summary.quickStats.overallMemoryUsage) / 1024),
+		(float(summary.runtime.host.summary.hardware.memorySize) / 1024 / 1024 / 1024))
+
+	return vminfo
+
 
 def GetDisplayVmInfo(vminfo):
 	info_list = []				# list for vm info
@@ -226,6 +372,55 @@ def GetDisplayVmInfo(vminfo):
 
 	return info_list
 
+# right alignment
+def GetDisplayVmInfo_rjust(vminfo):
+	info_list = []				# list for vm info
+	
+	info_list.append("Sever Name".rjust(32) + ": " + "{}".format(vminfo.serverName))
+	info_list.append("Description".rjust(32) + ": " +"{}".format(vminfo.description))
+	info_list.append("Guest".rjust(32) + ": " +"{}".format(vminfo.guest))
+	info_list.append("Snapshot Status".rjust(32) + ": " +"{}".format(vminfo.snapshotStaus))
+	info_list.append("VM .vmx Path".rjust(32) + ": " +"{}".format(vminfo.vmxPath))
+	
+	info_list.append('')
+	info_list.append("Virtual Disks".rjust(32) + ": " +"{}".format(vminfo.vDisks[0]))
+	if len(vminfo.vDisks) > 1:
+		vminfo.vDisks.pop(0)
+		for vd_info in vminfo.vDisks:
+			info_list.append("".rjust(32) + "  " +"{}".format(vd_info))
+	
+	info_list.append('')
+	info_list.append("Logical Drive".rjust(32) + ": " +"{}".format(vminfo.lDisks[0]))
+	if len(vminfo.lDisks) > 1:
+		vminfo.lDisks.pop(0)
+		for drive_info in vminfo.lDisks:
+			info_list.append("".rjust(32) + "  " +"{}".format(drive_info))
+
+	info_list.append('')
+	info_list.append("Virtual NIC(s)".rjust(32) + ": " +"{}".format(vminfo.nics[0]))
+	if len(vminfo.nics) > 1:
+		vminfo.nics.pop(0)
+		for nic_info in vminfo.nics:
+			info_list.append("".rjust(32) + "  " +"{}".format(nic_info))
+
+	info_list.append('')
+	info_list.append("[VM] IP Address".rjust(32) + ": " +"{}".format(vminfo.ipaddr))
+	info_list.append("[VM] Limits".rjust(32) + ": " +"{}".format(vminfo.limits))
+	info_list.append("[VM] Memory".rjust(32) + ": " +"{}".format(vminfo.memory))
+	info_list.append("[VM] Memory Shared".rjust(32) + ": " +"{}".format(vminfo.memoryShared))
+	info_list.append("[VM] Memory Balloon".rjust(32) + ": " +"{}".format(vminfo.memoryBalloon))
+	info_list.append("[VM] Memory Swapped".rjust(32) + ": " +"{}".format(vminfo.memorySwapped))
+	info_list.append("[VM] Memory Active".rjust(32) + ": " +"{}".format(vminfo.memoryActive))
+	info_list.append("[VM] Datastore Average IO".rjust(32) + ": " +"{}".format(vminfo.datastoreAvgIo))
+	info_list.append("[VM] Datastore Average Latency".rjust(32) + ": " +"{}".format(vminfo.datastoreAvgLatency))
+	info_list.append("[VM] Overall Network Usage".rjust(32) + ": " +"{}".format(vminfo.overallNetworkUage))
+	info_list.append("[Host] Name".rjust(32) + ": " +"{}".format(vminfo.hostName))
+	info_list.append("[Host] CPU Detail".rjust(32) + ": " +"{}".format(vminfo.hostCpuDetail))
+	info_list.append("[Host] CPU Type".rjust(32) + ": " +"{}".format(vminfo.hostCpuType))
+	info_list.append("[Host] CPU Usage".rjust(32) + ": " +"{}".format(vminfo.hostCpuUsage))
+	info_list.append("[Host] Memory Usage".rjust(32) + ": " +"{}".format(vminfo.hostMemoryUsage))
+
+	return info_list
 
 # counterId에 따른 performance metrics를 구한다.
 def BuildQuery(content, vchtime, counterId, instance, vm, interval=1):
@@ -239,6 +434,42 @@ def BuildQuery(content, vchtime, counterId, instance, vm, interval=1):
 	perfResults = perfManager.QueryPerf(querySpec=[querySpec])
 	if perfResults:
 		return perfResults
+	else:
+		print('ERROR: Performance results empty.  TIP: Check time drift on source and vCenter server')
+		print('Troubleshooting info:')
+		print('vCenter/host date and time: {}'.format(vchtime))
+		print('Start perf counter time   :  {}'.format(startTime))
+		print('End perf counter time     :  {}'.format(endTime))
+		print(query)
+		exit()
+
+
+
+# for monitor. added: 2018. 04. 12
+# instances : instance arg list  ex: ["", "*", "", ...]
+def QueryMetrics(content, vchtime, counterIds, instances, vm, interval=1):
+	perfManager = content.perfManager
+	metricIds = []
+	for cid, instance in zip(counterIds, instances):
+		metricId = vim.PerformanceManager.MetricId(counterId=cid, instance=instance)
+		metricIds.append(metricId)
+
+	if interval <= 0: interval = 1
+	startTime = vchtime - timedelta(minutes=(interval + 1))
+	endTime = vchtime - timedelta(minutes=1)
+	querySpec = vim.PerformanceManager.QuerySpec(intervalId=20, entity=vm, metricId=metricIds, startTime=startTime,
+							endTime=endTime)
+
+	res = perfManager.QueryPerf(querySpec=[querySpec])
+	cids_metrics = {}
+	if res:
+		for m in res:
+			for metric in m.value:
+				cid = metric.id.counterId
+				metrics = metric.value[:]
+				cids_metrics[cid] = metrics
+
+		return cids_metrics
 	else:
 		print('ERROR: Performance results empty.  TIP: Check time drift on source and vCenter server')
 		print('Troubleshooting info:')
@@ -339,23 +570,30 @@ def GetBizVmsInOperatingLUN(content):
 	
 
 
-def main():
-	pmb.setupManagedObject()
-	content = pmb.si.content
-	perf_dict = GetPerfDict(content)
-	vchtime = pmb.si.CurrentTime()
-	kerpdb = pmb.getManagedObjectRefId('kerpdb')
-
-	vminfo = GetVmInfo(kerpdb, content, vchtime, 1, perf_dict)
-	vminfo_list = GetDisplayVmInfo(vminfo)	
-
-	for info in vminfo_list:
-		print(info)
-
-	
-
-
-
 
 if __name__ == '__main__':
-	main()
+	
+	pmb.setupManagedObject()
+	content = pmb.si.content
+	#perf_dict = GetPerfDict(content)
+	vchtime = pmb.si.CurrentTime()
+	kerpdb = pmb.getManagedObjectRefId('kerpdb')
+	'''
+	import mvariables as mvars
+	cids = list(mvars.counterId_instance.keys())
+	instances = list(mvars.counterId_instance.values())
+	'''
+	# m = QueryMetrics(content, vchtime, cids, instances, kerpdb)
+	# print(m)
+
+	
+	
+	
+	
+	#vminfo = GetVmInfo(kerpdb, content, vchtime, 1, perf_dict)
+	vminfo = GetVmInfoMetrics(kerpdb, content, vchtime, 1)
+	vminfo_list = GetDisplayVmInfo(vminfo)	
+	
+	for info in vminfo_list:
+		print(info)
+	

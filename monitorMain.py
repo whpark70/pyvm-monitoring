@@ -6,13 +6,13 @@ import sys, threading, gc
 from PyQt5.QtWidgets import QApplication, QWidget, QListView, QMainWindow, QHBoxLayout, QTextBrowser
 from PyQt5.QtGui import QStandardItem, QStandardItemModel
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QModelIndex, Qt, QObject, QStringListModel, QTimer, QVariant
-from toolbox2_expand import Ui_Form
+from mainUI import Ui_Form
 
 from matplotlib.axes._axes import Axes
 from pyVmomi import vim
 
 import pymonbase as pmb
-import timerplot_2 as tim
+import timerplot as tim
 import mvariables as mvars
 from vmcollector import  GetVmInfoMetrics, GetDisplayVmInfo_rjust
 
@@ -54,7 +54,7 @@ class MyWindow(QObject):   # QWidget-> QObejct로 변경. UI thread와 logic thr
 		
 		# listview category info added, select page
 		self.ui.serverListView.clicked.connect(lambda index: self.selectServerPage(index, 'server'))
-		#self.ui.networkListView.clicked.connect(lambda index: self.selectNetworkPage(index, 'network'))
+		self.ui.networkListView.clicked.connect(lambda index: self.selectNetworkPage(index, 'network'))
 	
 		# plotting
 		#self.ui.serverListView.clicked.connect(self.update_plot)
@@ -95,6 +95,11 @@ class MyWindow(QObject):   # QWidget-> QObejct로 변경. UI thread와 logic thr
 		
 	# index: index of listview
 	def selectServerPage(self, index, category):
+		'''
+		Main StackedWidget에서 Server Name이용하여 해당 child widget을 찾는다.
+		Top Layout을 찾아 20초 간격으로 실시간 갱신 되는 graph를 위해 cpu, memory, disk 개의 canvas를 추가하고 
+		thread를 연결한다.
+		'''
 	
 		serverName = index.data()				# host name in domain
 
@@ -215,7 +220,26 @@ class MyWindow(QObject):   # QWidget-> QObejct로 변경. UI thread와 logic thr
 			self.ui.stackedWidget.setCurrentIndex(0)
 
 		self.prevViewPage = serverName
+
+	def selectNetworkPage(self, index, category):
+		'''
+		Network device name을 이용하여 stackedWidget 내에 해당 widget을  찾는다.
+		'''
+		deviceName = index.data()	# network device name
+
+		# staked widget의 child widget, 즉 Page를 찾는다.
+		stackedWidget = self.ui.stackedWidget.findChild(QObject, deviceName, Qt.FindDirectChildrenOnly)
+		if stackedWidget:
+			self.ui.stackedWidget.setCurrentWidget(stackedWidget)
 		
+		# find Tab Widget under stackedWidget
+		tabWidgetName = deviceName + '_tab'
+		tabWidget = stackedWidget.findChild(QObject, tabWidgetName, Qt.FindDirectChildrenOnly)
+
+		# find each tab under tab Widget: ex: headUTM_day, headUTM_week. ...
+		# tabWidget = stackedWidget.findChild(QObject, tabWidgetName)		
+		
+
 
 def main():
 
