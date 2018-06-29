@@ -3,7 +3,7 @@ interpolattion 적용
 '''
 
 import sys, threading, gc
-from PyQt5.QtWidgets import QApplication, QWidget, QListView, QMainWindow, QHBoxLayout, QTextBrowser
+from PyQt5.QtWidgets import QApplication, QWidget, QListView, QMainWindow, QHBoxLayout, QTextBrowser, QScrollArea, QTabWidget
 from PyQt5.QtGui import QStandardItem, QStandardItemModel
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QModelIndex, Qt, QObject, QStringListModel, QTimer, QVariant
 from mainUI import Ui_Form
@@ -16,6 +16,8 @@ import timerplot as tim
 import mvariables as mvars
 from vmcollector import  GetVmInfoMetrics, GetDisplayVmInfo_rjust
 
+import utm_db as utm
+import mplUtmWidget as muw
 #from pympler import tracker
 
 class MyWindow(QObject):   # QWidget-> QObejct로 변경. UI thread와 logic thread 분리? 2018.04.04
@@ -27,6 +29,8 @@ class MyWindow(QObject):   # QWidget-> QObejct로 변경. UI thread와 logic thr
 		super().__init__()
 		self.widget = QWidget()
 		self.ui = Ui_Form()
+		self.db_engine = None
+		self.ifname_list = ['eth'+str(i) for i in range(1, 11)]			# utm interface name list
 		self.ui.setupUi(self.widget)
 		self.prevViewPage = None 	# view list의 item index, 화면전환 시 사용.
 
@@ -35,9 +39,8 @@ class MyWindow(QObject):   # QWidget-> QObejct로 변경. UI thread와 logic thr
 
 		pmb.setupManagedObject()
 
-		#self.serverList = ['kerp', 'kerpdb', 'gw00', 'GW2','epdmapp']
 		self.serverList = pmb.getVmList()
-		self.networkList = ['HeadUTM','Head02UTM', 'BalanUTM', 'KaUTM' ]
+		self.networkList = ['HeadUTM']
 
 		serverModel = QStringListModel()
 		serverModel.setStringList(self.serverList)
@@ -55,10 +58,9 @@ class MyWindow(QObject):   # QWidget-> QObejct로 변경. UI thread와 logic thr
 		# listview category info added, select page
 		self.ui.serverListView.clicked.connect(lambda index: self.selectServerPage(index, 'server'))
 		self.ui.networkListView.clicked.connect(lambda index: self.selectNetworkPage(index, 'network'))
-	
-		# plotting
-		#self.ui.serverListView.clicked.connect(self.update_plot)
 
+		self.ui.HeadUTM_tab.currentChanged.connect(self.changeTab)
+	
 		self.ui.dashboardButton.clicked.connect(self.itemToggle)
 		self.ui.serverButton.clicked.connect(self.itemToggle)
 		self.ui.networkButton.clicked.connect(self.itemToggle)
@@ -93,6 +95,31 @@ class MyWindow(QObject):   # QWidget-> QObejct로 변경. UI thread와 logic thr
 			self.ui.networkListView.setVisible(False)
 			self.ui.stackedWidget.setCurrentIndex(0)
 		
+	# tab widget에서 tab click 시 slot,  other event: selectNetworkPage
+	def changeTab(self, i):
+		
+		signal_source = self.sender()		# ex: HeadUTM_tab
+		tabName = signal_source.tabText(i)
+		tabPage = signal_source.widget(i)	# ex: current tab widget: HeadUTM_day
+		
+		deviceName, c_interval = tabPage.objectName().split('_')	
+		scrollArea = tabPage.findChild(QScrollArea,'scrollArea_'+ c_interval) 	# find scrollArea for each interval
+		
+		sampling_mean_interval= None
+		if tabName == '일간':
+			sampling_mean_interval = '10T'
+		elif tabName == '주간':
+			sampling_mean_interval = '30T'
+		elif tabName == '월간':
+			sampling_mean_interval = '30T'
+
+		if_usage_info_list = utm.get_ifusage_dafaframes(self.db_engine, self.ifname_list, c_interval=c_interval, sampling_mean_interval=sampling_mean_interval)
+		plotter = muw.CanvasWidget(if_usage_info_list)
+		scrollArea.setWidget(plotter)	
+
+
+
+
 	# index: index of listview
 	def selectServerPage(self, index, category):
 		'''
@@ -227,19 +254,27 @@ class MyWindow(QObject):   # QWidget-> QObejct로 변경. UI thread와 logic thr
 		'''
 		deviceName = index.data()	# network device name
 
+		if self.db_engine == None:
+			self.db_engine = utm.create_db_engine()
+
 		# staked widget의 child widget, 즉 Page를 찾는다.
 		stackedWidget = self.ui.stackedWidget.findChild(QObject, deviceName, Qt.FindDirectChildrenOnly)
 		if stackedWidget:
 			self.ui.stackedWidget.setCurrentWidget(stackedWidget)
-		
+
 		# find Tab Widget under stackedWidget
 		tabWidgetName = deviceName + '_tab'
-		tabWidget = stackedWidget.findChild(QObject, tabWidgetName, Qt.FindDirectChildrenOnly)
-
-		# find each tab under tab Widget: ex: headUTM_day, headUTM_week. ...
-		# tabWidget = stackedWidget.findChild(QObject, tabWidgetName)		
+		tabWidget = stackedWidget.findChild(QTabWidget, tabWidgetName)
+		tabWidget.setCurrentIndex(0)
 		
-
+		# for daily
+		tabPage = tabWidget.widget(0)	# ex: current tab widget: HeadUTM_day
+		c_interval = tabPage.objectName().split('_')[1]	
+		scrollArea = tabPage.findChild(QScrollArea,'scrollArea_'+ c_interval) 
+		if_usage_info_list = utm.get_ifusage_dafaframes(self.db_engine, self.ifname_list, c_interval=c_interval, sampling_mean_interval='10T')
+		plotter = muw.CanvasWidget(if_usage_info_list)
+		scrollArea.setWidget(plotter)	
+		
 
 def main():
 
